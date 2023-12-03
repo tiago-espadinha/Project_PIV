@@ -6,10 +6,16 @@ import math
 import random
 import configparser
 
-def load_config(file_path):
+def load_config(file_path, mode):
     config = configparser.ConfigParser()
     config.read(file_path)
+    config = config[mode]
     return config
+
+def parse_transforms(config):
+    transform_type = config.get('transforms').split()[0]
+    transform_scope = config.get('transforms').split()[1]
+    return transform_type, transform_scope
 
 def generate_random_integers(n, r):
     return [random.randint(0, r-1) for _ in range(n)]
@@ -87,74 +93,78 @@ def find_best_homography(points1, points2, P=0.99, p=0.5, n_samples=4):
 def main():
 
     # what should be outputed
-    f=scipy.io.loadmat('Project_PIV/specs/surf_features.mat')
+    f=scipy.io.loadmat('features.mat')
     feat = f['features']
     print("Feature")
     print(" -> type: ", type(feat))
     print(" -> shape: ", feat.shape)
     print("Keypoint")
-    print(" -> shape: ", feat[0,2].shape)
-
-    #Example (will be changed)
-    image1 = cv2.imread('image_examples\parede1.jpg', cv2.IMREAD_COLOR)
-    image2 = cv2.imread('image_examples\parede2.jpg', cv2.IMREAD_COLOR)
+    print(" -> shape: ", feat[0].shape)
     
+    frames_directory = 'processed_videos/trymefirst/frames/'
+    
+    # keypoints1 = feat[0][0]
+    # descriptors1 = feat[0][1]
+    # keypoints2 = feat[1355][0]
+    # descriptors2 = feat[1355][1]
+    
+    # Get data from the configuration file
+    config = load_config('conf_file.cfg', 'DEFAULT')
+    transform_type, transform_scope = parse_transforms(config)
+    image_map = cv2.imread(config['image_map'], cv2.IMREAD_COLOR)
+    
+    # Get Features from the map
     sift = cv2.SIFT.create()
+    keypoints_map, descriptors_map = sift.detectAndCompute(image_map, None)
+    keypoints_map = np.float32([keypoints_map[m].pt for m in range(len(keypoints_map))]).reshape(-1,2)
     
-    keypoints1, descriptors1 = sift.detectAndCompute(image1, None)
-    keypoints2, descriptors2 = sift.detectAndCompute(image2, None)
-    
-    # Create a Brute Force Matcher
-    bf = cv2.BFMatcher()
-    
-    # Match descriptors using KNN (k-nearest neighbors)
-    matches = bf.knnMatch(descriptors1, descriptors2, k=2)
-    
-    # Apply ratio test to get good matches
-    good_matches = []
-    for m, n in matches:
-        if m.distance < 0.5 * n.distance:
-            good_matches.append(m)
-    
-    # Get corresponding points
-    points1 = np.float32([keypoints1[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-    points2 = np.float32([keypoints2[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-    
-    # # Draw the matches
-    # img_matches = cv2.drawMatches(image1, keypoints1, image2, keypoints2, good_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-    # cv2.imshow('Matches', img_matches)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
-    
-    points1 = points1.reshape((points1.shape[0], points1.shape[2]))
-    # print("Points 1: \n", points1)
-    points2 = points2.reshape((points2.shape[0], points2.shape[2]))
-    # print("Points 2: \n", points2)
-    
-    P = 0.99 # Probability of success
-    p = 0.5 # Probability of all points being inliers (0.5 worst case or if you don't know)
-    n_samples = 4 # Number of points to be used for the calculation of the homography between the images
-    
-    H = find_best_homography(points1, points2, P=0.99, p=0.5, n_samples=4)
-    height, width = image2.shape[:2]
-    warped_image_1 = cv2.warpPerspective(image1, H, (width, height))
-    
-    # Create a 2x2 subplot grid
-    fig, axs = plt.subplots(2, figsize=(10, 10))
-    
-    # Original left image
-    axs[0].imshow(cv2.cvtColor(image2, cv2.COLOR_BGR2RGB))
-    axs[0].set_title('Original Image 2')
-    
-    # Original right image
-    axs[1].imshow(cv2.cvtColor(warped_image_1, cv2.COLOR_BGR2RGB))
-    axs[1].set_title('Warped Image 1')
-    
-    # Adjust layout for better spacing
-    plt.tight_layout()
-    
-    # Display the plot
-    plt.show()
+    if transform_type == 'homography':
+        if transform_scope == 'map':    # Compute all homographies between each frame and the map
+            for i in range(len(feat)):
+                keypoints1 = feat[i][0]
+                descriptors1 = feat[i][1]
+                frame_filename = f'{frames_directory}frame_{i:04d}.jpg'
+                image1 = cv2.imread(frame_filename, cv2.IMREAD_COLOR)
+                
+                # Create a Brute Force Matcher
+                bf = cv2.BFMatcher()
+                
+                # Match descriptors using KNN (k-nearest neighbors)
+                matches = bf.knnMatch(descriptors1, descriptors_map, k=2)
+                
+                # Apply ratio test to get good matches
+                good_matches = []
+                for m, n in matches:
+                    if m.distance < 0.5 * n.distance:
+                        good_matches.append(m)
+                
+                # Get corresponding points
+                points1 = np.float32([keypoints1[m.queryIdx] for m in good_matches]).reshape(-1, 1, 2)
+                points2 = np.float32([keypoints_map[m.trainIdx] for m in good_matches]).reshape(-1, 1, 2)
+                
+                points1 = points1.reshape((points1.shape[0], points1.shape[2]))
+                points2 = points2.reshape((points2.shape[0], points2.shape[2]))
+                
+                H = find_best_homography(points1, points2, P=0.99, p=0.5, n_samples=4)
+                height, width = image_map.shape[:2]
+                warped_image_1 = cv2.warpPerspective(image1, H, (width, height))
+                
+                # Create a 2x2 subplot grid
+                fig, axs = plt.subplots(2, figsize=(10, 10))
+                
+                # Original left image
+                axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
+                axs[0].set_title('Original Image 2')
+                
+                # Original right image
+                axs[1].imshow(cv2.cvtColor(warped_image_1, cv2.COLOR_BGR2RGB))
+                axs[1].set_title('Warped Image 1')
+                
+                # Adjust layout for better spacing
+                plt.tight_layout()
+                
+                # Display the plot
+                plt.show()   
 
 if __name__ == '__main__':
     main()
