@@ -4,6 +4,12 @@ import matplotlib.pyplot as plt
 import cv2
 import math
 import random
+import configparser
+
+def load_config(file_path):
+    config = configparser.ConfigParser()
+    config.read(file_path)
+    return config
 
 def generate_random_integers(n, r):
     return [random.randint(0, r-1) for _ in range(n)]
