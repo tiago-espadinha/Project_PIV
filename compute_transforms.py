@@ -17,10 +17,20 @@ def parse_transforms(config):
     transform_scope = config.get('transforms').split()[1]
     return transform_type, transform_scope
 
+def parse_matches(config):
+    label = config.get('pts_in_map').split()[0]
+    map_points = np.array(config.get('pts_in_map').split()[1:], dtype='int32').reshape((-1, 2))
+    frame_number = int(config.get('pts_in_frame').split()[0])
+    frame_points = np.array(config.get('pts_in_frame').split()[1:], dtype='int32').reshape((-1, 2))
+    return label, map_points, frame_number, frame_points
+
 def generate_random_integers(n, r):
     return [random.randint(0, r-1) for _ in range(n)]
 
 def compute_homography(points1, points2):
+    """
+    Returns -> homography between the two set of matching points
+    """
     A = []
     for i in range(len(points1)):
         x, y = points1[i][0], points1[i][1]
@@ -29,26 +39,16 @@ def compute_homography(points1, points2):
         A.append([0, 0, 0, -x, -y, -1, x*yp, y*yp, yp])
     A = np.array(A)
     _, _, Vh = np.linalg.svd(A)
-    L = Vh[-1,:] / Vh[-1,-1]
-    H = L.reshape(3, 3)
+    H = Vh[-1,:].reshape(3, 3)
     return H
 
-def apply_homography(H, image):
-    h, w = image.shape[:2]
-    print(image.shape)
-    y_indices, x_indices = np.indices((h, w))
-    indices = np.stack((x_indices.ravel(), y_indices.ravel(), np.ones_like(x_indices).ravel())).T
-    print("Indices: \n", indices, indices.shape)
-    transformed_indices = np.copy(np.array(indices, dtype='float64'))
-    for i in range(len(indices)):
-        transformed_indices[i] = H @ indices[i]
-        transformed_indices[i] /= transformed_indices[i][2]
-
-
 def find_best_homography(points1, points2, P=0.99, p=0.5, n_samples=4):
-    # P = 0.99 # Probability of success
-    # p = 0.5 # Probability of all points being inliers (0.5 worst case or if you don't know)
-    # n_samples = 4 # Number of points to be used for the calculation of the homography between the images
+    """
+    P - Probability of success \n
+    p - Probability of all points being inliers (0.5 worst case or if you don't know) \n
+    n_samples - Number of points to be used for the calculation of the homography between the images \n
+    Returns -> optimal homography between the two set of matching points
+    """
     k = math.ceil(np.log(1 - P) / np.log(1 - p**n_samples))
 
     for i in range(k):
@@ -112,6 +112,8 @@ def main():
     config = load_config('conf_file.cfg', 'DEFAULT')
     transform_type, transform_scope = parse_transforms(config)
     image_map = cv2.imread(config['image_map'], cv2.IMREAD_COLOR)
+    height, width = image_map.shape[:2]
+    label, map_points, frame_number, frame_points = parse_matches(config)
     
     # Get Features from the map
     sift = cv2.SIFT.create()
@@ -119,6 +121,27 @@ def main():
     keypoints_map = np.float32([keypoints_map[m].pt for m in range(len(keypoints_map))]).reshape(-1,2)
     
     if transform_type == 'homography':
+        H_map = compute_homography(frame_points, map_points)
+        image_frame = cv2.imread(f'{frames_directory}frame_{frame_number:04d}.jpg', cv2.IMREAD_COLOR)
+        warped_image_1 = cv2.warpPerspective(image_frame, H_map, (width, height))
+        
+        # Create a 2x2 subplot grid
+        fig, axs = plt.subplots(2, figsize=(10, 10))
+        
+        # Original left image
+        axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
+        axs[0].set_title('Map Image')
+        
+        # Original right image
+        axs[1].imshow(cv2.cvtColor(warped_image_1, cv2.COLOR_BGR2RGB))
+        axs[1].set_title('Warped Frame Image')
+        
+        # Adjust layout for better spacing
+        plt.tight_layout()
+        
+        # Display the plot
+        plt.show() 
+        
         if transform_scope == 'map':    # Compute all homographies between each frame and the map
             for i in range(len(feat)):
                 keypoints1 = feat[i][0]
@@ -139,32 +162,13 @@ def main():
                         good_matches.append(m)
                 
                 # Get corresponding points
-                points1 = np.float32([keypoints1[m.queryIdx] for m in good_matches]).reshape(-1, 1, 2)
-                points2 = np.float32([keypoints_map[m.trainIdx] for m in good_matches]).reshape(-1, 1, 2)
-                
-                points1 = points1.reshape((points1.shape[0], points1.shape[2]))
-                points2 = points2.reshape((points2.shape[0], points2.shape[2]))
+                points1 = np.float32([keypoints1[m.queryIdx] for m in good_matches]).reshape(-1, 2)
+                points2 = np.float32([keypoints_map[m.trainIdx] for m in good_matches]).reshape(-1, 2)
                 
                 H = find_best_homography(points1, points2, P=0.99, p=0.5, n_samples=4)
-                height, width = image_map.shape[:2]
                 warped_image_1 = cv2.warpPerspective(image1, H, (width, height))
                 
-                # Create a 2x2 subplot grid
-                fig, axs = plt.subplots(2, figsize=(10, 10))
                 
-                # Original left image
-                axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
-                axs[0].set_title('Original Image 2')
-                
-                # Original right image
-                axs[1].imshow(cv2.cvtColor(warped_image_1, cv2.COLOR_BGR2RGB))
-                axs[1].set_title('Warped Image 1')
-                
-                # Adjust layout for better spacing
-                plt.tight_layout()
-                
-                # Display the plot
-                plt.show()   
 
 if __name__ == '__main__':
     main()
