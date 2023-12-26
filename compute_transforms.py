@@ -27,10 +27,15 @@ def parse_matches(config):
 def generate_random_integers(n, r):
     return [random.randint(0, r-1) for _ in range(n)]
 
-def compute_homography(points1, points2):
+def find_homography(points1, points2, RANSAC, tol = 3.0):
     """
     Returns -> homography between the two set of matching points
     """
+    if RANSAC != None:
+        inliers = RANSAC(points1, points2, tol=tol)
+        points1 = points1[inliers]
+        points2 = points2[inliers]
+        
     A = []
     for i in range(len(points1)):
         x, y = points1[i][0], points1[i][1]
@@ -42,7 +47,7 @@ def compute_homography(points1, points2):
     H = Vh[-1,:].reshape(3, 3)
     return H
 
-def find_best_homography(points1, points2, P=0.99, p=0.5, n_samples=4):
+def RANSAC(points1, points2, P=0.99, p=0.5, n_samples=4, tol = 3.0):
     """
     P - Probability of success \n
     p - Probability of all points being inliers (0.5 worst case or if you don't know) \n
@@ -50,50 +55,50 @@ def find_best_homography(points1, points2, P=0.99, p=0.5, n_samples=4):
     Returns -> optimal homography between the two set of matching points
     """
     k = math.ceil(np.log(1 - P) / np.log(1 - p**n_samples))
-
     for i in range(k):
         random_indices = generate_random_integers(n_samples, len(points1))
         sampled_points1 = [points1[index] for index in random_indices]
         sampled_points2 = [points2[index] for index in random_indices]
 
         # Build the design matrix
-        H = compute_homography(sampled_points1, sampled_points2)
+        H = find_homography(sampled_points1, sampled_points2, None)
         H_normalized = H / H[2, 2]
 
         points1 = np.hstack((points1, np.ones((len(points1), 1))))
         points1_transformed = np.copy(points1)
 
         for j in range(len(points1)):
-            points1_transformed[j] = H_normalized @ points1[j]
+            points1_transformed[j] = np.dot(H_normalized, points1[j])
             points1_transformed[j] /= points1_transformed[j][2]
 
         points1_transformed = points1_transformed[:, :2]
-        inliers = 0
+        inliers_idx = []
         for j in range(len(points1)):
             # if the distance of the matching points is lower than a certain threshold after projecting a 
             # point from a frame to another than they are considered as inliers
-            if np.mean((points2[j] - points1_transformed[j])**2) < 3.0:
-                inliers += 1
-        error = np.mean((points2 - points1_transformed)**2)
+            if np.mean((points2[j] - points1_transformed[j])**2) < tol:
+                inliers_idx.append(j)
+        # error = np.mean((points2 - points1_transformed)**2)
             
         if i==0:
-            best_H = H_normalized
-            min_error = error
-            max_inliers = inliers
+            max_inliers_idx = inliers_idx
+            # min_error = error
         else:
-            if inliers > max_inliers:
-                best_H = H_normalized
-                min_error = error
-                max_inliers = inliers
+            if len(inliers_idx) > len(max_inliers_idx):
+                max_inliers_idx = inliers_idx
+                # min_error = error
         points1 = points1[:, :2]
-    print(f"Min Error: {min_error} with {max_inliers} inliers")
-    return best_H, min_error
+    # print(f"Min Error: {min_error} with {len(max_inliers_idx)} inliers")
+    return max_inliers_idx
 
-def match_and_compute(features, frame_1, frame_2, width, height):
+def match_and_compute(features, frame_1, frame_2, width, height, H_matrix):
     keypoints_1 = features[frame_1][0]
     descriptors_1 = features[frame_1][1]
     keypoints_2 = features[frame_2][0]
     descriptors_2 = features[frame_2][1]
+    
+    if isinstance(H_matrix[frame_1][frame_2], np.ndarray):
+        return H_matrix[frame_1][frame_2], H_matrix
     
     # Create a Brute Force Matcher
     bf = cv2.BFMatcher()
@@ -107,19 +112,29 @@ def match_and_compute(features, frame_1, frame_2, width, height):
         if m.distance < 0.5 * n.distance:
             good_matches.append(m)
             
-    print(f"Number of good matches between frames {frame_2} and {frame_1}: {len(good_matches)}")
+    # print(f"Number of good matches between frames {frame_2} and {frame_1}: {len(good_matches)}")
     
-    if len(good_matches) < 20:
-        H1 = match_and_compute(features, int((frame_2+frame_1)/2), frame_2, width, height)
-        H2 = match_and_compute(features, frame_1, int((frame_2+frame_1)/2), width, height)
-        return H1 @ H2
+    if len(good_matches) < 20 and np.abs(frame_1 - frame_2) != 1:
+        if isinstance(H_matrix[int((frame_2+frame_1)/2)][frame_2], np.ndarray):
+            H1 = np.array(H_matrix[int((frame_2+frame_1)/2)][frame_2])
+        else:    
+            H1, H_matrix = match_and_compute(features, int((frame_2+frame_1)/2), frame_2, width, height, H_matrix)
+        if isinstance(H_matrix[frame_1][int((frame_2+frame_1)/2)], np.ndarray):
+            H2 = np.array(H_matrix[frame_1][int((frame_2+frame_1)/2)])
+        else:   
+            H2, H_matrix = match_and_compute(features, frame_1, int((frame_2+frame_1)/2), width, height, H_matrix)
+        H = np.dot(H1, H2)
+        H_matrix[frame_1][frame_2] = H
+        H_matrix[frame_2][frame_1] = np.linalg.inv(H)
+        return H, H_matrix
 
     points_1 = np.float32([keypoints_1[m.queryIdx] for m in good_matches]).reshape(-1, 2)
     points_2 = np.float32([keypoints_2[m.trainIdx] for m in good_matches]).reshape(-1, 2)
     
-    H, error = find_best_homography(points_1, points_2, P=0.99, p=0.5, n_samples=4)
-    
-    return H
+    H = find_homography(points_1, points_2, RANSAC)
+    H_matrix[frame_1][frame_2] = H
+    H_matrix[frame_2][frame_1] = np.linalg.inv(H)
+    return H, H_matrix
     
 def main():
     """ Drone dataset:
@@ -152,34 +167,39 @@ def main():
     _, map_points, keyframe_number, keyframe_points = parse_matches(config)
     
     if transform_type == 'homography':
-        H_map = compute_homography(keyframe_points, map_points)
-        image_keyframe = cv2.imread(f'{frames_directory}frame_{keyframe_number:04d}.jpg', cv2.IMREAD_COLOR)
+        H_map = find_homography(keyframe_points, map_points, None)
+        H_matrix = np.empty((len(feat), len(feat)), dtype=np.ndarray)
+        H_frame_to_map = np.empty(len(feat), dtype=np.ndarray)
+        # image_keyframe = cv2.imread(f'{frames_directory}frame_{keyframe_number:04d}.jpg', cv2.IMREAD_COLOR)
         
         if transform_scope == 'map':    # Compute all homographies between each frame and the map
             for i in range(len(feat)):
-                frame_filename = f'{frames_directory}frame_{i:04d}.jpg'
-                image = cv2.imread(frame_filename, cv2.IMREAD_COLOR)
+                _, H_matrix = match_and_compute(feat, i, keyframe_number, width, height, H_matrix)
+                     
+        elif transform_scope == 'all':  # Compute all homographies between all frames and the map
+            for i in range(len(feat)):
+                for j in range(len(feat)):
+                    _, H_matrix = match_and_compute(feat, i, j, width, height, H_matrix)
+        
+        for i in range(len(feat)):
+            H_frame_to_map[i] = np.dot(H_map, H_matrix[i][keyframe_number])
+            # H_frame_to_map[i] /= H_frame_to_map[i][2, 2]
+            frame_filename = f'{frames_directory}frame_{i:04d}.jpg'
+            image = cv2.imread(frame_filename, cv2.IMREAD_COLOR)
+            warped_image_to_map = cv2.warpPerspective(image, H_frame_to_map[i], (width, height))
+            # warped_image_to_map = cv2.warpPerspective(image,  H_frame_to_map[i], (width, height))
                 
-                H = match_and_compute(feat, i, keyframe_number, width, height)     
-                warped_image = cv2.warpPerspective(image, H, (width, height))  
-                warped_image_to_map = cv2.warpPerspective(warped_image, H_map, (width, height))
+            fig, axs = plt.subplots(2, figsize=(10, 10))
                 
-                fig, axs = plt.subplots(2, 2, figsize=(10, 10))
-                
-                axs[0][0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
-                axs[0][0].set_title('Map Image')
-                
-                axs[0][1].imshow(cv2.cvtColor(warped_image_to_map, cv2.COLOR_BGR2RGB))
-                axs[0][1].set_title(f'Warped frame {i} to map')
-                
-                axs[1][0].imshow(cv2.cvtColor(warped_image, cv2.COLOR_BGR2RGB))
-                axs[1][0].set_title(f'Warped frame {i} to keyframe{keyframe_number}')
-                
-                axs[1][1].imshow(cv2.cvtColor(image_keyframe, cv2.COLOR_BGR2RGB))
-                axs[1][1].set_title(f'Keyframe {keyframe_number}')
-                
-                plt.tight_layout()
-                plt.show() 
+            axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
+            axs[0].set_title('Map Image')
+            
+            axs[1].imshow(cv2.cvtColor(warped_image_to_map, cv2.COLOR_BGR2RGB))
+            axs[1].set_title(f'Warped frame {i} to map')
+            
+            plt.tight_layout()
+            plt.show()
+        
                 
 if __name__ == '__main__':
     main()
