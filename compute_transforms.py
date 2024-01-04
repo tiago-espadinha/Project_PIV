@@ -32,9 +32,9 @@ def find_homography(points1, points2, RANSAC, tol = 3.0):
     Returns -> homography between the two set of matching points
     """
     if RANSAC != None:
-        inliers = RANSAC(points1, points2, tol=tol)
-        points1 = points1[inliers]
-        points2 = points2[inliers]
+        outliers = RANSAC(points1, points2, tol=tol)
+        points1 = [points1[i] for i in range(len(points1)) if i not in outliers]
+        points2 = [points2[i] for i in range(len(points2)) if i not in outliers]
         
     A = []
     for i in range(len(points1)):
@@ -72,41 +72,41 @@ def RANSAC(points1, points2, P=0.99, p=0.5, n_samples=4, tol = 3.0):
             points1_transformed[j] /= points1_transformed[j][2]
 
         points1_transformed = points1_transformed[:, :2]
-        inliers_idx = []
+        outliers = []
         for j in range(len(points1)):
             # if the distance of the matching points is lower than a certain threshold after projecting a 
             # point from a frame to another than they are considered as inliers
-            if np.mean((points2[j] - points1_transformed[j])**2) < tol:
-                inliers_idx.append(j)
+            if np.mean((points2[j] - points1_transformed[j])**2) > tol:
+                outliers.append(j)
         # error = np.mean((points2 - points1_transformed)**2)
             
         if i==0:
-            max_inliers_idx = inliers_idx
+            min_outliers = outliers
             # min_error = error
         else:
-            if len(inliers_idx) > len(max_inliers_idx):
-                max_inliers_idx = inliers_idx
+            if len(outliers) < len(min_outliers):
+                min_outliers = outliers
                 # min_error = error
         points1 = points1[:, :2]
     # print(f"Min Error: {min_error} with {len(max_inliers_idx)} inliers")
-    return max_inliers_idx
+    return min_outliers
 
 def match_and_compute(features, frame_1, frame_2, width, height, H_matrix):
-    keypoints_1 = features[frame_1][0]
-    descriptors_1 = features[frame_1][1]
-    keypoints_2 = features[frame_2][0]
-    descriptors_2 = features[frame_2][1]
+    keypoints1 = features[frame_1][0]
+    descriptors1 = features[frame_1][1]
+    keypoints2 = features[frame_2][0]
+    descriptors2 = features[frame_2][1]
     
     if isinstance(H_matrix[frame_1][frame_2], np.ndarray):
         return H_matrix[frame_1][frame_2], H_matrix
+            
+    FLANN_INDEX = 1
+    index_parameters = dict(algorithm=FLANN_INDEX, trees=5)
+    search_parameters = dict(checks=50)
     
-    # Create a Brute Force Matcher
-    bf = cv2.BFMatcher()
-    
-    # Match descriptors using KNN (k-nearest neighbors)
-    matches = bf.knnMatch(descriptors_1, descriptors_2, k=2)
-    
-    # Apply ratio test to get good matches
+    flann = cv2.FlannBasedMatcher(index_parameters, search_parameters)
+    matches = flann.knnMatch(descriptors1, descriptors2, k=2)
+
     good_matches = []
     for m, n in matches:
         if m.distance < 0.5 * n.distance:
@@ -124,16 +124,16 @@ def match_and_compute(features, frame_1, frame_2, width, height, H_matrix):
         else:   
             H2, H_matrix = match_and_compute(features, frame_1, int((frame_2+frame_1)/2), width, height, H_matrix)
         H = np.dot(H1, H2)
-        H_matrix[frame_1][frame_2] = H
-        H_matrix[frame_2][frame_1] = np.linalg.inv(H)
+        H_matrix[frame_1][frame_2] = np.copy(H)
+        H_matrix[frame_2][frame_1] = np.copy(np.linalg.inv(H))
         return H, H_matrix
 
-    points_1 = np.float32([keypoints_1[m.queryIdx] for m in good_matches]).reshape(-1, 2)
-    points_2 = np.float32([keypoints_2[m.trainIdx] for m in good_matches]).reshape(-1, 2)
+    points_1 = np.float32([keypoints1[m.queryIdx] for m in good_matches]).reshape(-1, 2)
+    points_2 = np.float32([keypoints2[m.trainIdx] for m in good_matches]).reshape(-1, 2)
     
     H = find_homography(points_1, points_2, RANSAC)
-    H_matrix[frame_1][frame_2] = H
-    H_matrix[frame_2][frame_1] = np.linalg.inv(H)
+    H_matrix[frame_1][frame_2] = np.copy(H)
+    H_matrix[frame_2][frame_1] = np.copy(np.linalg.inv(H))
     return H, H_matrix
     
 def main():
@@ -143,7 +143,10 @@ def main():
     """ Tesla dataset:
     frames_directory =  'processed_videos/TeslaVC_carreira/back_frames/'
     """
-    frames_directory = 'processed_videos/trymefirst/frames/'
+    """ Lisbon dataset:
+    'processed_videos/trymefirst_lisbon/frames/'
+    """
+    frames_directory = 'processed_videos/TeslaVC_carreira/back_frames/'
     
     # keypoints1 = feat[frame1_number][0]
     # descriptors1 = feat[frame1_number][1]
@@ -151,7 +154,7 @@ def main():
     # descriptors2 = feat[frame2_number][1]
     
     # Get data from the configuration file
-    config = load_config('part1.cfg', 'DEFAULT')
+    config = load_config('conf_file.cfg', 'DEFAULT')
     # what should be outputed
     f=scipy.io.loadmat(config['keypoints_out'])
     feat = f['features']
@@ -181,24 +184,24 @@ def main():
                 for j in range(len(feat)):
                     _, H_matrix = match_and_compute(feat, i, j, width, height, H_matrix)
         
-        for i in range(len(feat)):
-            H_frame_to_map[i] = np.dot(H_map, H_matrix[i][keyframe_number])
-            # H_frame_to_map[i] /= H_frame_to_map[i][2, 2]
-            frame_filename = f'{frames_directory}frame_{i:04d}.jpg'
-            image = cv2.imread(frame_filename, cv2.IMREAD_COLOR)
-            warped_image_to_map = cv2.warpPerspective(image, H_frame_to_map[i], (width, height))
-            # warped_image_to_map = cv2.warpPerspective(image,  H_frame_to_map[i], (width, height))
+        # for i in range(len(feat)):
+        #     H_frame_to_map[i] = np.dot(H_map, H_matrix[i][keyframe_number])
+        #     # H_frame_to_map[i] /= H_frame_to_map[i][2, 2]
+        #     frame_filename = f'{frames_directory}frame_{i:04d}.jpg'
+        #     image = cv2.imread(frame_filename, cv2.IMREAD_COLOR)
+        #     warped_image_to_map = cv2.warpPerspective(image, H_frame_to_map[i], (width, height))
+        #     # warped_image_to_map = cv2.warpPerspective(image,  H_frame_to_map[i], (width, height))
                 
-            fig, axs = plt.subplots(2, figsize=(10, 10))
+        #     fig, axs = plt.subplots(2, figsize=(10, 10))
                 
-            axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
-            axs[0].set_title('Map Image')
+        #     axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
+        #     axs[0].set_title('Map Image')
             
-            axs[1].imshow(cv2.cvtColor(warped_image_to_map, cv2.COLOR_BGR2RGB))
-            axs[1].set_title(f'Warped frame {i} to map')
+        #     axs[1].imshow(cv2.cvtColor(warped_image_to_map, cv2.COLOR_BGR2RGB))
+        #     axs[1].set_title(f'Warped frame {i} to map')
             
-            plt.tight_layout()
-            plt.show()
+        #     plt.tight_layout()
+        #     plt.show()
         
                 
 if __name__ == '__main__':
