@@ -175,15 +175,28 @@ def main():
         H_frame_to_map = np.empty(len(feat), dtype=np.ndarray)
         # image_keyframe = cv2.imread(f'{frames_directory}frame_{keyframe_number:04d}.jpg', cv2.IMREAD_COLOR)
         
+        H_output = []
         if transform_scope == 'map':    # Compute all homographies between each frame and the map
             for i in range(len(feat)):
-                _, H_matrix = match_and_compute(feat, i, keyframe_number, width, height, H_matrix)
+                H, H_matrix = match_and_compute(feat, i, keyframe_number, width, height, H_matrix)
+                H_final = H_map @ H
+                H_lines = [i+1, 0] + H_final.flatten().tolist()  # Include i, and flattened h elements
+                H_output.append(H_lines)
                      
         elif transform_scope == 'all':  # Compute all homographies between all frames and the map
             for i in range(len(feat)):
+                H, H_matrix = match_and_compute(feat, i, keyframe_number, width, height, H_matrix)
+                H_final = H_map @ H
+                H_lines = [i+1, 0] + H_final.flatten().tolist()  # Include i, and flattened h elements
+                H_output.append(H_lines)
                 for j in range(len(feat)):
-                    _, H_matrix = match_and_compute(feat, i, j, width, height, H_matrix)
+                    H, H_matrix = match_and_compute(feat, i, j, width, height, H_matrix)
+                    H_lines = [i+1, j+1] + H.flatten().tolist()  # Include i, j, and flattened h elements
+                    H_output.append(H_lines)
         
+        # Matlab output
+        mdic = {"H_matrix": H_output}
+        scipy.io.savemat(config['transforms_out'], mdic)
         # for i in range(len(feat)):
         #     H_frame_to_map[i] = np.dot(H_map, H_matrix[i][keyframe_number])
         #     # H_frame_to_map[i] /= H_frame_to_map[i][2, 2]

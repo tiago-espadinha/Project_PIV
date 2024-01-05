@@ -13,8 +13,9 @@ def main():
 
     # # Opens the config file
     # config_file = sys.argv[1]
+    output_path = "processed_videos/trymefirst/frames"
 
-    config_file = 'part1.cfg'
+    config_file = 'conf_file.cfg'
 
     config = ConfigParser()
     config.read(config_file)
@@ -48,6 +49,10 @@ def main():
             descriptors = np.float32(descriptors)
             frame_data = {'keypoints': keypoints, 'descriptors': descriptors}
             video_data.append(frame_data)
+
+            # Save the frame as an image
+            frame_filename = f"{output_path}/frame_{int(frame_count/undersampling_factor):04d}.jpg"
+            cv2.imwrite(frame_filename, frame)
             
         # Increment the frame counter
         frame_count += 1
