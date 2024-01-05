@@ -5,6 +5,7 @@ import cv2
 import math
 import random
 import configparser
+import sys
 
 # Load config file
 def load_config(file_path, mode):
@@ -139,6 +140,12 @@ def match_and_compute(features, frame_1, frame_2, width, height, H_matrix):
     
 def main():
 
+    # Opens the config file
+    if len(sys.argv) != 2:
+        config_file = 'conf_file.cfg'
+    else:
+        config_file = sys.argv[1]
+
     # Get data from the configuration file
     config = load_config('conf_file.cfg', 'DEFAULT')
     frames_directory = config.get('frames_directory')
@@ -187,22 +194,22 @@ def main():
 
         # Check image transformation
         # Uncomment the following lines to check the transformation of a frame to the map
-        for i in range(len(feat)):
-            H_frame_to_map[i] = np.dot(H_map, H_matrix[i][keyframe_number])
-            frame_filename = f'{frames_directory}frame_{i:04d}.jpg'
-            image = cv2.imread(frame_filename, cv2.IMREAD_COLOR)
-            warped_image_to_map = cv2.warpPerspective(image, H_frame_to_map[i], (width, height))
+        # for i in range(len(feat)):
+        #     H_frame_to_map[i] = np.dot(H_map, H_matrix[i][keyframe_number])
+        #     frame_filename = f'{frames_directory}frame_{i:04d}.jpg'
+        #     image = cv2.imread(frame_filename, cv2.IMREAD_COLOR)
+        #     warped_image_to_map = cv2.warpPerspective(image, H_frame_to_map[i], (width, height))
                 
-            fig, axs = plt.subplots(2, figsize=(10, 10))
+        #     fig, axs = plt.subplots(2, figsize=(10, 10))
                 
-            axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
-            axs[0].set_title('Map Image')
+        #     axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
+        #     axs[0].set_title('Map Image')
             
-            axs[1].imshow(cv2.cvtColor(warped_image_to_map, cv2.COLOR_BGR2RGB))
-            axs[1].set_title(f'Warped frame {i} to map')
+        #     axs[1].imshow(cv2.cvtColor(warped_image_to_map, cv2.COLOR_BGR2RGB))
+        #     axs[1].set_title(f'Warped frame {i} to map')
             
-            plt.tight_layout()
-            plt.show()
+        #     plt.tight_layout()
+        #     plt.show()
         
                 
 if __name__ == '__main__':

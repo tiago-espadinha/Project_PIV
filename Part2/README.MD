@@ -47,7 +47,7 @@ Make sure the following elements of the `config_file.cfg` are adequately set:
 * output_path_NN (path to save results)
 * output_path_STEREO (path to save results)
 
-Run either the `compute_transform_NN.py` or the `compute_transform_STEREO.py` scripts to compute the depth map. The first will do so using a pre-trained neural network, while the second will do so using SIFT matches between prespectives. **Note that to use the neural network script the `stereo_model.py` script also needs to be present**
+Run either the `compute_transform_NN.py` or the `compute_transform_STEREO.py` scripts to compute the depth map. The first will do so using a pre-trained neural network, while the second will do so using SIFT matches between prespectives. **Note that to use the `compute_transform_NN.py` script, `stereo_model.py` also needs to be present**
 
 ```bash
 python compute_transform_NN.py
