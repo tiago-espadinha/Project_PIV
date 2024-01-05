@@ -11,12 +11,6 @@ def load_config(file_path, mode):
     config = config_edit[mode]
     return config_edit, config
 
-def get_frame_path(file_path):
-    file_dir, filename = os.path.split(file_path)
-    dir_name, _ = os.path.splitext(filename)
-    new_file_dir = os.path.join(file_dir, dir_name) + '/'
-    return new_file_dir
-
 def click_event(event, x, y, flags, params):
     if event == cv2.EVENT_LBUTTONDOWN:
         cv2.circle(params['image'], (x, y), 5, (255, 0, 0), -1)
@@ -25,10 +19,11 @@ def click_event(event, x, y, flags, params):
 
 # Load images
 config_edit, config = load_config('conf_file.cfg', 'DEFAULT')
-frames_directory = get_frame_path(config['frames_directory'])
+frames_directory = config['frames_directory']
+image_map = config['image_map']
 
 frame_num = 0
-image1 = cv2.imread(frames_directory + f'frame_{frame_num:04d}.jpg', cv2.IMREAD_COLOR)
+image1 = cv2.imread(frames_directory + image_map, cv2.IMREAD_COLOR)
 image2 = cv2.imread(frames_directory + 'frame_0030.jpg', cv2.IMREAD_COLOR)
 
 # Initialize lists to store points
@@ -58,11 +53,8 @@ points2 = np.array(points_image2, dtype='int32')
 config_file = 'conf_file.cfg'
 
 # Edit config file
-# TODO: Avoid removing comments on config file
 config['pts_in_map'] = 'Label ' + str(points1.flatten())[1:-1]
-config['pts_in_frame'] = str(frame_num) + ' ' + str(points2.flatten())[1:-1]
-config['image_map'] = frames_directory + 'frame_0000.jpg'
+config['pts_in_frame'] = str(30) + ' ' + str(points2.flatten())[1:-1]
 
 with open(config_file, 'w') as configfile:
     config_edit.write(configfile)
-# fd.close

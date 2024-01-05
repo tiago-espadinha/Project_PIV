@@ -255,8 +255,10 @@ def main():
     filtered_disparity = wls_filter.filter(displ, img_left, None, dispr)
     
     # Display Disparity Map
+    plt.figure('Disparity Map')
     plt.imshow(filtered_disparity)
     plt.colorbar()
+    plt.savefig(output_path + 'Disparity_Map.jpeg')
     plt.show()
     
     print(filtered_disparity)
@@ -280,8 +282,10 @@ def main():
     
     # depth = (fx * baseline) / (disparity + (cx2 - cx1))
     depth_map = ((calib_data_L['cameraMatrix'][0,0] * np.linalg.norm(t)) / (filtered_disparity))
+    plt.figure('Depth Map')
     plt.imshow(depth_map)
     plt.colorbar()
+    plt.savefig(output_path + '/Depth_Map.jpeg')
     plt.show()
      
     img_left = cv2.cvtColor(img_left, cv2.COLOR_GRAY2RGB)
@@ -299,6 +303,7 @@ def main():
     # visualize:
     pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
     o3d.visualization.draw_geometries([pcd])
+    o3d.io.write_point_cloud(output_path + '/Point_Cloud.pcd', pcd)
  
 if __name__ == '__main__':
     main()

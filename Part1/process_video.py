@@ -4,30 +4,35 @@ from configparser import ConfigParser
 import cv2
 import time
 import sys
+import os
+
+
+# Create a new folder if it doesn't exist
+def path_exists(file_path):
+    dir = os.path.dirname(file_path)
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
 
 def main():
-    # # Use config file as input argument
-    # if len(sys.argv) != 2:
-    #     print("Usage: python process_video.py <config_file>")
-    #     sys.exit(1)
 
-    # # Opens the config file
-    # config_file = sys.argv[1]
-    output_path = "processed_videos/trymefirst/frames"
-
-    config_file = 'conf_file.cfg'
+    # Opens the config file
+    if len(sys.argv) != 2:
+        config_file = 'conf_file.cfg'
+    else:
+        config_file = sys.argv[1]
 
     config = ConfigParser()
     config.read(config_file)
     config = config['DEFAULT']
+    undersampling_factor = int(config['undersampling_factor'])
+    output_path = config['frames_directory']
+    path_exists(output_path)
 
     # Load video
     video = cv2.VideoCapture(config['videos'])
     sift = cv2.SIFT_create(nfeatures = 0)
     video_data = []
-    
-    # Set the undersampling factor
-    undersampling_factor = 30  # Change this to the desired factor
     
     # Initialize a frame counter
     frame_count = 0
@@ -43,6 +48,10 @@ def main():
             # Save the frame as an image
             frame_filename = f"{output_path}/frame_{int(frame_count/undersampling_factor):04d}.jpg"
             cv2.imwrite(frame_filename, frame)
+            
+            if frame_count == 0:
+                frame_filename = f"{output_path}/map.jpg"
+                cv2.imwrite(frame_filename, frame)
             
             # Display the resulting frame
             img = cv2.drawKeypoints(frame, keypoints, frame)

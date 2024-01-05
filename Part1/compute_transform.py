@@ -6,6 +6,7 @@ import math
 import random
 import configparser
 
+# Load config file
 def load_config(file_path, mode):
     config = configparser.ConfigParser()
     config.read(file_path)
@@ -137,24 +138,11 @@ def match_and_compute(features, frame_1, frame_2, width, height, H_matrix):
     return H, H_matrix
     
 def main():
-    """ Drone dataset:
-    frames_directory = 'processed_videos/trymefirst/frames/'
-    """
-    """ Tesla dataset:
-    frames_directory =  'processed_videos/TeslaVC_carreira/back_frames/'
-    """
-    """ Lisbon dataset:
-    'processed_videos/trymefirst_lisbon/frames/'
-    """
-    
-    # keypoints1 = feat[frame1_number][0]
-    # descriptors1 = feat[frame1_number][1]
-    # keypoints2 = feat[frame2_number][0]
-    # descriptors2 = feat[frame2_number][1]
-    
+
     # Get data from the configuration file
     config = load_config('conf_file.cfg', 'DEFAULT')
     frames_directory = config.get('frames_directory')
+
     # what should be outputed
     f=scipy.io.loadmat(config['keypoints_out'])
     feat = f['features']
@@ -165,7 +153,7 @@ def main():
     print(" -> shape: ", feat[0].shape)
     
     transform_type, transform_scope = parse_transforms(config)
-    image_map = cv2.imread(config['image_map'], cv2.IMREAD_COLOR)
+    image_map = cv2.imread(frames_directory + config['image_map'], cv2.IMREAD_COLOR)
     height, width = image_map.shape[:2]
     _, map_points, keyframe_number, keyframe_points = parse_matches(config)
     
@@ -173,7 +161,6 @@ def main():
         H_map = find_homography(keyframe_points, map_points, None)
         H_matrix = np.empty((len(feat), len(feat)), dtype=np.ndarray)
         H_frame_to_map = np.empty(len(feat), dtype=np.ndarray)
-        # image_keyframe = cv2.imread(f'{frames_directory}frame_{keyframe_number:04d}.jpg', cv2.IMREAD_COLOR)
         
         H_output = []
         if transform_scope == 'map':    # Compute all homographies between each frame and the map
@@ -197,24 +184,25 @@ def main():
         # Matlab output
         mdic = {"H_matrix": H_output}
         scipy.io.savemat(config['transforms_out'], mdic)
-        # for i in range(len(feat)):
-        #     H_frame_to_map[i] = np.dot(H_map, H_matrix[i][keyframe_number])
-        #     # H_frame_to_map[i] /= H_frame_to_map[i][2, 2]
-        #     frame_filename = f'{frames_directory}frame_{i:04d}.jpg'
-        #     image = cv2.imread(frame_filename, cv2.IMREAD_COLOR)
-        #     warped_image_to_map = cv2.warpPerspective(image, H_frame_to_map[i], (width, height))
-        #     # warped_image_to_map = cv2.warpPerspective(image,  H_frame_to_map[i], (width, height))
+
+        # Check image transformation
+        # Uncomment the following lines to check the transformation of a frame to the map
+        for i in range(len(feat)):
+            H_frame_to_map[i] = np.dot(H_map, H_matrix[i][keyframe_number])
+            frame_filename = f'{frames_directory}frame_{i:04d}.jpg'
+            image = cv2.imread(frame_filename, cv2.IMREAD_COLOR)
+            warped_image_to_map = cv2.warpPerspective(image, H_frame_to_map[i], (width, height))
                 
-        #     fig, axs = plt.subplots(2, figsize=(10, 10))
+            fig, axs = plt.subplots(2, figsize=(10, 10))
                 
-        #     axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
-        #     axs[0].set_title('Map Image')
+            axs[0].imshow(cv2.cvtColor(image_map, cv2.COLOR_BGR2RGB))
+            axs[0].set_title('Map Image')
             
-        #     axs[1].imshow(cv2.cvtColor(warped_image_to_map, cv2.COLOR_BGR2RGB))
-        #     axs[1].set_title(f'Warped frame {i} to map')
+            axs[1].imshow(cv2.cvtColor(warped_image_to_map, cv2.COLOR_BGR2RGB))
+            axs[1].set_title(f'Warped frame {i} to map')
             
-        #     plt.tight_layout()
-        #     plt.show()
+            plt.tight_layout()
+            plt.show()
         
                 
 if __name__ == '__main__':
