@@ -4,7 +4,24 @@ from scipy.interpolate import griddata
 import matplotlib.pyplot as plt
 import cv2
 import open3d as o3d
-  
+import configparser
+import os
+
+
+# Load config file
+def load_config(file_path, mode):
+    config = configparser.ConfigParser()
+    config.read(file_path)
+    config = config[mode]
+    return config
+
+
+# Create a new folder if it doesn't exist
+def path_exists(file_path):
+    dir = os.path.dirname(file_path)
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
 def compute_dlt_transformation_matrix(points_3d, points_2d):
     """
     Compute the Direct Linear Transformation (DLT) transformation matrix.
@@ -69,16 +86,26 @@ def compute_rotation_translation(points1, points2, K1, K2):
     return F, mask, E_normalized, R, t
 
 def main():
-   
-   # Load images
-    img_left = cv2.imread("my_datasets/trymefirst/quarto/left.jpeg", cv2.IMREAD_GRAYSCALE)
-    img_right = cv2.imread("my_datasets/trymefirst/quarto/right.jpeg", cv2.IMREAD_GRAYSCALE)
+    
+    config = load_config('conf_file.cfg', 'DEFAULT')
+    output_path = config['output_path_STEREO']
+    path_exists(output_path)
+
+    # Load images
+    dataset_path = config['dataset_path']
+    img_left_name = config['left_image_name']
+    img_right_name = config['right_image_name']
+
+    img_left = cv2.imread(dataset_path + img_left_name, cv2.IMREAD_GRAYSCALE)
+    img_right = cv2.imread(dataset_path + img_right_name, cv2.IMREAD_GRAYSCALE)
     frameSize = (600, 800)
     img_left = cv2.resize(img_left, frameSize)
     img_right = cv2.resize(img_right, frameSize)
     
-    calib_data_R = loadmat("chessBoard/calibration_parameters/calib_R.mat")
-    calib_data_L = loadmat("chessBoard/calibration_parameters/calib_L.mat")
+    calib_path = config['calib_path']
+    calib_path_out = calib_path + '/output/'
+    calib_data_R = loadmat(calib_path_out + "calib_R.mat")
+    calib_data_L = loadmat(calib_path_out + "calib_L.mat")
    
     # Detect keypoints and descriptors
     sift = cv2.SIFT_create()
@@ -117,10 +144,12 @@ def main():
         x, y = map(int, [point[0], point[1]])
         cv2.circle(image2_with_matches, (x, y), 5, (0, 255, 0), 3)
     
+    plt.figure('Matched SIFT Features')
     plt.subplot(121)
     plt.imshow(image1_with_matches)
     plt.subplot(122)
     plt.imshow(image2_with_matches)
+    plt.savefig(output_path + 'Matched_SIFT.jpeg')
     plt.show()
     
     F, mask, E, R, t = compute_rotation_translation(points1, points2, calib_data_L['cameraMatrix'], calib_data_R['cameraMatrix'])
@@ -150,12 +179,14 @@ def main():
         x0, y0, x1, y1 = map(int, [0, -line[2]/line[1], img_left.shape[1], -(line[2]+line[0]*img_left.shape[1])/line[1]])
         cv2.line(image2_with_lines, (x0, y0), (x1, y1), (0, 255, 0), 1)
     
+    plt.figure('Epipolar Lines')
     plt.subplot(121)
     plt.imshow(image1_with_lines)
     plt.gca().set_aspect('equal', adjustable='box')  # Set aspect ratio
     plt.subplot(122)
     plt.imshow(image2_with_lines)
     plt.gca().set_aspect('equal', adjustable='box')  # Set aspect ratio
+    plt.savefig(output_path + 'Epipolar_Lines.jpeg')
     plt.show()
     
     img_right = cv2.cvtColor(img_right, cv2.COLOR_BGR2GRAY)
@@ -180,10 +211,12 @@ def main():
     # x, y, w, h = roi_2
     # rectified_img2 = rectified_img2[y:y+h, x:x+w]
     
+    plt.figure('Rectified Images')
     plt.subplot(121)
     plt.imshow(rectified_img1)
     plt.subplot(122)
     plt.imshow(rectified_img2)
+    plt.savefig(output_path + 'Rectified_Images.jpeg')
     plt.show()
     
     window_size = 3

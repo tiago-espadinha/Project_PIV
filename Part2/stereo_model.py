@@ -1,10 +1,18 @@
 import time
 from dataclasses import dataclass
-
 import cv2
 import numpy as np
 import onnxruntime
 import open3d as o3d
+import configparser
+
+
+# Load config file
+def load_config(file_path, mode):
+    config = configparser.ConfigParser()
+    config.read(file_path)
+    config = config[mode]
+    return config
 
 @dataclass
 class CameraConfig:
@@ -144,6 +152,7 @@ class CREStereo():
 
 		self.output_shape = model_outputs[0].shape
 
+
 if __name__ == '__main__':
 	
     # The code is importing the `imread_from_url` function from the `imread_from_url` module and using
@@ -152,9 +161,9 @@ if __name__ == '__main__':
     # images. The shape of the left and right images is printed to the console.
 
 	from imread_from_url import imread_from_url
-
+	config = load_config('conf_file.cfg', 'DEFAULT')
+	model_path = config.get('model_path')
 	# Initialize model
-	model_path = 'pre_trained_models/crestereo_combined_iter10_720x1280.onnx'
 	depth_estimator = CREStereo(model_path)
 
 	# Load images

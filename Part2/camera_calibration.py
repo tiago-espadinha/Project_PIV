@@ -2,6 +2,23 @@ import numpy as np
 import cv2 as cv
 import glob
 from scipy.io import savemat
+import configparser
+import os
+
+
+# Load config file
+def load_config(file_path, mode):
+    config = configparser.ConfigParser()
+    config.read(file_path)
+    config = config[mode]
+    return config
+
+
+# Create a new folder if it doesn't exist
+def path_exists(file_path):
+    dir = os.path.dirname(file_path)
+    if not os.path.exists(dir):
+        os.makedirs(dir)
 
 class Camera:
     
@@ -103,6 +120,13 @@ class Camera:
 def main():
 
     ################ FIND CHESSBOARD CORNERS - OBJECT POINTS AND IMAGE POINTS #############################
+    
+    # Load config file paths
+    config = load_config('conf_file.cfg', 'DEFAULT')
+    calib_path = config['calib_path']
+    calib_path_in = calib_path + '/input/'
+    calib_path_out = calib_path + '/output/'
+    path_exists(calib_path_out)
 
     chessboardSize = (9, 6)
     frameSize = (600, 800)
@@ -120,9 +144,9 @@ def main():
 
 
     # Arrays to store object points and image points from all the images.
-    camera_R = Camera(frameSize, criteria, glob.glob('chessBoard/images_R/*.jpeg'), 'chessBoard/calibration_parameters/calib_R.mat')
+    camera_R = Camera(frameSize, criteria, glob.glob(calib_path_in + 'images_R/*.jpeg'), calib_path_out + 'calib_R.mat')
     objpoints = camera_R.calibrate(objp, chessboardSize)
-    camera_L = Camera(frameSize, criteria, glob.glob('chessBoard/images_L/*.jpeg'), 'chessBoard/calibration_parameters/calib_L.mat')
+    camera_L = Camera(frameSize, criteria, glob.glob(calib_path_in + 'images_L/*.jpeg'),  calib_path_out + 'calib_L.mat')
     objpoints = camera_L.calibrate(objp, chessboardSize)
     
 if __name__ == '__main__':

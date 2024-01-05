@@ -4,6 +4,24 @@ import matplotlib.pyplot as plt
 import cv2
 import open3d as o3d
 from stereo_model import CREStereo
+import configparser
+import os
+
+
+# Load config file
+def load_config(file_path, mode):
+    config = configparser.ConfigParser()
+    config.read(file_path)
+    config = config[mode]
+    return config
+
+
+# Create a new folder if it doesn't exist
+def path_exists(file_path):
+    dir = os.path.dirname(file_path)
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
 
 def compute_rotation_translation(points1, points2, K1, K2):
     """
@@ -47,14 +65,23 @@ def main():
     # it to load images from URLs. It then initializes a `CREStereo` object with a specified model
     # path and uses the `depth_estimator` object to estimate the depth map from the left and right
     # images. The shape of the left and right images is printed to the console.
+    
+    # Load config file paths
+    config = load_config('conf_file.cfg', 'DEFAULT')
+    output_path = config['output_path_NN']
+    path_exists(output_path)
 
     # Initialize model
-    model_path = 'pre_trained_models/crestereo_combined_iter10_720x1280.onnx'
+    model_path = config['model_path']
     depth_estimator = CREStereo(model_path)
 
     # Load images
-    left_img = cv2.imread("my_datasets/trymefirst/quarto/left.jpeg")
-    right_img = cv2.imread("my_datasets/trymefirst/quarto/right.jpeg")
+    dataset_path = config['dataset_path']
+    img_left_name = config['left_image_name']
+    img_right_name = config['right_image_name']
+
+    left_img = cv2.imread(dataset_path + img_left_name)
+    right_img = cv2.imread(dataset_path + img_right_name)
     frameSize = (600, 800)
     left_img = cv2.resize(left_img, frameSize)
     right_img = cv2.resize(right_img, frameSize)
@@ -86,12 +113,14 @@ def main():
         disparity_map = depth_estimator(left_img, right_img)
     color_disparity = depth_estimator.draw_disparity()
     print(np.max(color_disparity), np.min(color_disparity))
-    cv2.imwrite('disparity_map.png', color_disparity)
+    cv2.imwrite(output_path + '/Disparity_Map.jpeg', color_disparity)
     
     print(disparity_map, disparity_map.shape)
     disparity_map = cv2.resize(disparity_map, frameSize)
+    plt.figure('Disparity Map')
     plt.imshow(disparity_map)
     plt.colorbar()
+    plt.savefig(output_path + '/Disparity_Map2.jpeg')
     plt.show()
 
     combined_img = np.hstack((left_img, color_disparity))
@@ -102,8 +131,10 @@ def main():
     
     left_img = cv2.cvtColor(cv2.resize(left_img, frameSize), cv2.COLOR_BGR2RGB)
     
-    calib_data_R = loadmat("chessBoard/calibration_parameters/calib_R.mat")
-    calib_data_L = loadmat("chessBoard/calibration_parameters/calib_L.mat")
+    calib_path = config['calib_path']
+    calib_path_out = calib_path + '/output/'
+    calib_data_R = loadmat(calib_path_out + "calib_R.mat")
+    calib_data_L = loadmat(calib_path_out + "calib_L.mat")
     
     F, mask, E, R, t = compute_rotation_translation(points1, points2, calib_data_L['cameraMatrix'], calib_data_R['cameraMatrix'])
     
@@ -111,8 +142,10 @@ def main():
     depth_map = depth_map = ((calib_data_L['cameraMatrix'][0,0] * np.linalg.norm(t)) / (disparity_map))
     depth_map = cv2.normalize(depth_map, None, 0.0, 1.0, norm_type=cv2.NORM_MINMAX)
     
+    plt.figure('Depth Map')
     plt.imshow(depth_map)
     plt.colorbar()
+    plt.savefig(output_path + '/Depth_Map.jpeg')
     plt.show()
     
     intrinsic_params = o3d.camera.PinholeCameraIntrinsic()
@@ -128,6 +161,7 @@ def main():
     # visualize:
     pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
     o3d.visualization.draw_geometries([pcd])
+    o3d.io.write_point_cloud(output_path + '/Point_Cloud.pcd', pcd)
     
 if __name__ == '__main__':
     main()
