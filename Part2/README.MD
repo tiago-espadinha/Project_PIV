@@ -1,5 +1,7 @@
 # Readme for Part 2 of Image Processing and Vision Project
 
+Github repository: https://github.com/tiago-espadinha/Project_PIV
+
 This repository contains code for camera calibration and depth map reconstruction, through neural network or SIFT matching.
 
 ## Requirements
@@ -36,6 +38,8 @@ python camera_calibration.py
 ```
 
 ### 2. Compute Depth Map (`compute_transform_NN.py` and `compute_transform_STEREO.py`)
+
+**IMPORTANT: If a neural network is not present go to the associated github page (https://github.com/tiago-espadinha/Project_PIV) and download the one present in the folder `models`**
 
 Make sure the following elements of the `config_file.cfg` are adequately set:
 
