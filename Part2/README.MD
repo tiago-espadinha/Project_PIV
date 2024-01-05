@@ -1,53 +1,60 @@
-# Readme for Image Processing and Vision Project
+# Readme for Part 2 of Image Processing and Vision Project
 
-This repository contains code for processing videos, extracting keypoints, and computing homographies between frames.
+This repository contains code for camera calibration and depth map reconstruction, through neural network or SIFT matching.
 
 ## Requirements
 
-open3d
-onnxruntime
-imread_from_url
+The code related to Part 2 of the project uses the following packages:
+
+* configparser
+* dataclasses
+* glob
+* matplotlib
+* numpy
+* onnxruntime
+* open3d
+* opencv
+* os
+* scipy
+* time
 
 ## Running the Code
 
-### 1. Process Video (`camera_calibration.py`)
+### 1. Camera Calibration (`camera_calibration.py`)
 
-Run the `process_video.py` script to process the video. The configuration file (`config_file.cfg`) includes  the video file path.
+Make sure the following elements of the `config_file.cfg` are adequately set:
 
-```bash
-python process_video.py
-```
+* calib_path (path to the calibration files)
+* dataset_path (path to input images)
+* left_image_name (name of the left stereo image)
+* right_image_name (name of the right stereo image)
 
-### 2. Get Keypoints (`compute_transform_NN.py`)
-
-Run the `get_keypoint.py` script to manually choose at least 4 keypoints in each image. One of them is frame 0, and the others can be selected interactively. The script will create a `keypoints.txt` with the new coordinates that must be correctly copied to the `config_file.cfg`.
-
-```bash
-python get_keypoint.py
-```
-
-### 3. Compute Homography (`compute_transform_STEREO.py`)
-
-Run the `compute_homography.py` script to compute homographies using the information from the video processing and manually selected keypoints. The script loads the video and keypoint coordinates from the `config_file.cfg` and uses the `transforms` parameter to operate in `all` or `map` mode.
+Run the `camera_calibration.py` script to get the camera intrinsics and extrinsics.
 
 ```bash
-python compute_homography.py
+python camera_calibration.py
 ```
 
-## Configuration File
+### 2. Compute Depth Map (`compute_transform_NN.py` and `compute_transform_STEREO.py`)
 
-The `config_file.cfg` is a configuration file used to specify parameters for video processing, keypoint selection, and homography computation. Ensure that the parameters are correctly set according to your requirements.
+Make sure the following elements of the `config_file.cfg` are adequately set:
 
+* calib_path (path to the calibration files)
+* dataset_path (path to input images)
+* left_image_name (name of the left stereo image)
+* right_image_name (name of the right stereo image)
+* model_path (path to the ONNX neural network model)
+* output_path_NN (path to save results)
+* output_path_STEREO (path to save results)
 
-from scipy.io import savemat, loadmat
-from scipy.interpolate import griddata
-import matplotlib.pyplot as plt
-import cv2
-import open3d as o3d
-import configparser
-import os
-import time
-from dataclasses import dataclass
-import numpy as np
-import onnxruntime
-import glob
+Run either the `compute_transform_NN.py` or the `compute_transform_STEREO.py` scripts to compute the depth map. The first will do so using a pre-trained neural network, while the second will do so using SIFT matches between prespectives. **Note that to use the neural network script the `stereo_model.py` script also needs to be present**
+
+```bash
+python compute_transform_NN.py
+```
+
+or
+
+```bash
+python compute_transform_STEREO.py
+```
