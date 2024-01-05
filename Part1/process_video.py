@@ -2,7 +2,6 @@ import numpy as np
 import scipy
 from configparser import ConfigParser
 import cv2
-import time
 import sys
 import os
 

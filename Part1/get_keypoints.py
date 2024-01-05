@@ -1,8 +1,6 @@
 import numpy as np
-from random import randrange
 import configparser
 import cv2
-import os
 
 # Load config file
 def load_config(file_path, mode):

@@ -31,3 +31,13 @@ python compute_homography.py
 ## Configuration File
 
 The `config_file.cfg` is a configuration file used to specify parameters for video processing, keypoint selection, and homography computation. Ensure that the parameters are correctly set according to your requirements.
+
+import numpy as np
+import scipy
+import matplotlib.pyplot as plt
+import cv2
+import math
+import random
+import configparser
+import sys
+import os
