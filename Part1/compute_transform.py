@@ -1,33 +1,56 @@
 import numpy as np
-import scipy
+import scipy.io as sio
 import matplotlib.pyplot as plt
 import cv2
 import math
 import random
-import configparser
 import sys
 
-# Load config file
-def load_config(file_path, mode):
-    config = configparser.ConfigParser()
-    config.read(file_path)
-    config = config[mode]
-    return config
+def parse_config_file(file_path):
+    config_dict = {}
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+
+            # Ignore comments
+            if line.startswith('#') or not line:
+                continue
+            
+            # Split the line into tokens
+            tokens = line.split()
+
+            # Extract parameter names and values
+            param_name = tokens[0]
+            param_values = tokens[1:]
+
+            # Check if the token already exists in the dictionary
+            if param_name in config_dict:
+                # Add new values to the existing token
+                config_dict[param_name].extend(param_values)
+            else:
+                # Create a new entry in the dictionary
+                config_dict[param_name] = param_values
+    return config_dict
+
 
 def parse_transforms(config):
-    transform_type = config.get('transforms').split()[0]
-    transform_scope = config.get('transforms').split()[1]
+    transform_type = config['transforms'][0]
+    transform_scope = config['transforms'][1]
     return transform_type, transform_scope
 
+
 def parse_matches(config):
-    label = config.get('pts_in_map').split()[0]
-    map_points = np.array(config.get('pts_in_map').split()[1:], dtype='int32').reshape((-1, 2))
-    frame_number = int(config.get('pts_in_frame').split()[0])
-    frame_points = np.array(config.get('pts_in_frame').split()[1:], dtype='int32').reshape((-1, 2))
+    label = config['pts_in_map'][0]
+    map_points = np.array(config['pts_in_map'][1:], dtype='int32').reshape((-1, 2))
+    frame_number = int(config['pts_in_frame'][0])
+    frame_points = np.array(config['pts_in_frame'][1:], dtype='int32').reshape((-1, 2))
     return label, map_points, frame_number, frame_points
+
 
 def generate_random_integers(n, r):
     return [random.randint(0, r-1) for _ in range(n)]
+
 
 def find_homography(points1, points2, RANSAC, tol = 3.0):
     """
@@ -80,17 +103,15 @@ def RANSAC(points1, points2, P=0.99, p=0.5, n_samples=4, tol = 3.0):
             # point from a frame to another than they are considered as inliers
             if np.mean((points2[j] - points1_transformed[j])**2) > tol:
                 outliers.append(j)
-        # error = np.mean((points2 - points1_transformed)**2)
             
         if i==0:
             min_outliers = outliers
-            # min_error = error
+            
         else:
             if len(outliers) < len(min_outliers):
                 min_outliers = outliers
-                # min_error = error
         points1 = points1[:, :2]
-    # print(f"Min Error: {min_error} with {len(max_inliers_idx)} inliers")
+    
     return min_outliers
 
 def match_and_compute(features, frame_1, frame_2, width, height, H_matrix):
@@ -147,20 +168,19 @@ def main():
         config_file = sys.argv[1]
 
     # Get data from the configuration file
-    config = load_config('conf_file.cfg', 'DEFAULT')
-    frames_directory = config.get('frames_directory')
+    config = parse_config_file(config_file)
 
-    # what should be outputed
-    f=scipy.io.loadmat(config['keypoints_out'])
+    # Check input format
+    f=sio.loadmat(config['keypoints_out'][0])
     feat = f['features']
-    print("Feature")
-    print(" -> type: ", type(feat))
-    print(" -> shape: ", feat.shape)
-    print("Keypoint")
-    print(" -> shape: ", feat[0].shape)
+    # print("Feature")
+    # print(" -> type: ", type(feat))
+    # print(" -> shape: ", feat.shape)
+    # print("Keypoint")
+    # print(" -> shape: ", feat[0].shape)
     
     transform_type, transform_scope = parse_transforms(config)
-    image_map = cv2.imread(frames_directory + config['image_map'], cv2.IMREAD_COLOR)
+    image_map = cv2.imread('map.jpg', cv2.IMREAD_COLOR)
     height, width = image_map.shape[:2]
     _, map_points, keyframe_number, keyframe_points = parse_matches(config)
     
@@ -190,7 +210,7 @@ def main():
         
         # Matlab output
         mdic = {"H_matrix": H_output}
-        scipy.io.savemat(config['transforms_out'], mdic)
+        sio.savemat(config['transforms_out'][0], mdic)
 
         # Check image transformation
         # Uncomment the following lines to check the transformation of a frame to the map

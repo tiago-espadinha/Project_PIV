@@ -1,16 +1,36 @@
 import numpy as np
-import scipy
-from configparser import ConfigParser
+import scipy.io as sio
 import cv2
 import sys
 import os
 
+# Load config file
+def parse_config_file(file_path):
+    config_dict = {}
 
-# Create a new folder if it doesn't exist
-def path_exists(file_path):
-    dir = os.path.dirname(file_path)
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+
+            # Ignore comments
+            if line.startswith('#') or not line:
+                continue
+            
+            # Split the line into tokens
+            tokens = line.split()
+
+            # Extract parameter names and values
+            param_name = tokens[0]
+            param_values = tokens[1:]
+
+            # Check if the token already exists in the dictionary
+            if param_name in config_dict:
+                # Add new values to the existing token
+                config_dict[param_name].extend(param_values)
+            else:
+                # Create a new entry in the dictionary
+                config_dict[param_name] = param_values
+    return config_dict
 
 
 def main():
@@ -21,15 +41,13 @@ def main():
     else:
         config_file = sys.argv[1]
 
-    config = ConfigParser()
-    config.read(config_file)
-    config = config['DEFAULT']
-    undersampling_factor = int(config['undersampling_factor'])
-    output_path = config['frames_directory']
-    path_exists(output_path)
+    config = parse_config_file(config_file)
+
+    undersampling_factor = 1
+    # image_map = config['image_map'][0]
 
     # Load video
-    video = cv2.VideoCapture(config['videos'])
+    video = cv2.VideoCapture(config['videos'][0])
     sift = cv2.SIFT_create(nfeatures = 0)
     video_data = []
     
@@ -44,17 +62,12 @@ def main():
         # Identify frame keypoints and descriptors
         keypoints, descriptors = sift.detectAndCompute(frame, None)
         if frame_count % undersampling_factor == 0:
-            # Save the frame as an image
-            frame_filename = f"{output_path}/frame_{int(frame_count/undersampling_factor):04d}.jpg"
-            cv2.imwrite(frame_filename, frame)
-            
-            if frame_count == 0:
-                frame_filename = f"{output_path}/map.jpg"
-                cv2.imwrite(frame_filename, frame)
+            # if frame_count == 0:
+            #     cv2.imwrite(image_map, frame)
             
             # Display the resulting frame
             img = cv2.drawKeypoints(frame, keypoints, frame)
-            cv2.imshow('frame', img)
+            #cv2.imshow('frame', img)
 
             # Append frame data to matlab array
             keypoints = np.float32([keypoints[m].pt for m in range(len(keypoints))]).reshape(-1,2)
@@ -73,14 +86,15 @@ def main():
     # Prepare data for matlab
     compiled_data = np.array([(frame_data['keypoints'], frame_data['descriptors']) for frame_data in video_data], dtype=object)
     mdic = {"features": compiled_data}
-    scipy.io.savemat(config['keypoints_out'], mdic)
+    sio.savemat(config['keypoints_out'][0], mdic)
 
     # Check output format
-    f=scipy.io.loadmat(config['keypoints_out'])
-    feat = f['features']
-    print("Feature")
-    print(" -> type: ", type(feat))
-    print(" -> shape: ", feat.shape)
+    # f=sio.loadmat(config['keypoints_out'][0])
+    # feat = f['features']
+    # print("Feature")
+    # print(" -> type: ", type(feat))
+    # print(" -> shape: ", feat.shape)
 
 if __name__ == '__main__':
     main()
+
